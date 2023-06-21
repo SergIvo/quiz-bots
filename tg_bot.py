@@ -1,52 +1,103 @@
 import json
 from random import choice
 
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, 
+    CallbackContext, ConversationHandler)
 from environs import Env
 from redis import Redis
 
 
-def start(update: Update, context: CallbackContext) -> None:
-    user = update.effective_user
-    update.message.reply_text(
-        f'Привет, {user}!'
-    )
+NEW_QUESTION, ANSWER = range(2)
 
-
-def reply_with_keyboard(update: Update, context: CallbackContext) -> None:
-    keyboard = [['Сдаюсь', 'Новый вопрос']]
-    keyboard_markup = ReplyKeyboardMarkup(keyboard)
-    questions = context.bot_data.get('questions')
-    db_connection = context.bot_data.get('db_connection')
-    user_id = update.message.from_user.id
-
-    if update.message.text == 'Новый вопрос':
-        new_question = choice(list(questions.keys()))
-        db_connection.set(
-            user_id, 
-            new_question
-        )
-        message_text = db_connection.get(user_id).decode()
-    elif update.message.text == 'Сдаюсь':
-        question = db_connection.get(user_id).decode()
-        message_text = questions[question]
-    else:
-        question = db_connection.get(user_id).decode()
-        answer = questions[question]
-        if update.message.text.lower() in answer.lower():
-            message_text = '''
-                Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»
-            '''
-        else:
-            message_text = '''
-                Неправильно… Попробуешь ещё раз?
-            '''
+def start(update: Update, context: CallbackContext):
+    user = update.effective_user.first_name
+    keyboard = [['Новый вопрос']]
+    keyboard_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    message_text = f'''
+        Привет, {user}!
+        Чтобы начать викторину, нажми «Новый вопрос»
+    '''
     update.message.reply_text(
         message_text,
         reply_markup=keyboard_markup
     )
+    return NEW_QUESTION
 
+
+def send_new_question(update: Update, context: CallbackContext):
+    keyboard = [['Сдаюсь']]
+    keyboard_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    questions = context.bot_data.get('questions')
+    db_connection = context.bot_data.get('db_connection')
+    user_id = update.message.from_user.id
+    
+    new_question = choice(list(questions.keys()))
+    db_connection.set(
+        user_id, 
+        new_question
+    )
+    update.message.reply_text(
+        new_question,
+        reply_markup=keyboard_markup
+    )
+    return ANSWER
+
+
+def handle_surrender(update: Update, context: CallbackContext):
+    keyboard = [['Новый вопрос']]
+    keyboard_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    questions = context.bot_data.get('questions')
+    db_connection = context.bot_data.get('db_connection')
+    user_id = update.message.from_user.id
+    question = db_connection.get(user_id).decode()
+    message_text = questions[question]
+    
+    update.message.reply_text(
+        message_text,
+        reply_markup=keyboard_markup
+    )
+    return NEW_QUESTION
+
+
+def check_answer(update: Update, context: CallbackContext):
+    questions = context.bot_data.get('questions')
+    db_connection = context.bot_data.get('db_connection')
+    user_id = update.message.from_user.id
+
+    question = db_connection.get(user_id).decode()
+    answer = questions[question]
+    if update.message.text.lower() in answer.lower():
+        message_text = '''
+            Правильно! Поздравляю! Для следующего вопроса нажми «Новый вопрос»
+        '''
+        keyboard = [['Новый вопрос']]
+        next_state = NEW_QUESTION
+    else:
+        message_text = '''
+            Неправильно… Попробуешь ещё раз?
+        '''
+        keyboard = [['Сдаюсь']]
+        next_state = ANSWER
+    keyboard_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    update.message.reply_text(
+        message_text,
+        reply_markup=keyboard_markup
+    )
+    return next_state
+
+
+def handle_break(update: Update, context: CallbackContext):
+    message_text = '''
+        Ок, пока.
+    '''
+    update.message.reply_text(
+        message_text,
+        reply_markup=ReplyKeyboardRemove()
+    )
+    return ConversationHandler.END
+    
 
 if __name__ == '__main__':
     env = Env()
@@ -64,8 +115,18 @@ if __name__ == '__main__':
     dispatcher.bot_data['questions'] = questions
     dispatcher.bot_data['db_connection'] = redis_connection
 
-    dispatcher.add_handler(CommandHandler('start', start))
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, reply_with_keyboard))
+    conversation_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            NEW_QUESTION: [MessageHandler(Filters.text('Новый вопрос'), send_new_question)], 
+            ANSWER: [
+                MessageHandler(Filters.text('Сдаюсь'), handle_surrender),
+                MessageHandler(Filters.text, check_answer)
+                ]
+        },
+        fallbacks=[CommandHandler('quite', handle_break)]
+    )
+    dispatcher.add_handler(conversation_handler)
 
     updater.start_polling()
     updater.idle()

@@ -1,4 +1,5 @@
 import json
+import logging
 from random import choice
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -6,7 +7,10 @@ from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters,
     CallbackContext, ConversationHandler)
 from environs import Env
 from redis import Redis
+from telegram_logging import TgLogsHandler
 
+
+logger = logging.getLogger('tg-quiz-bot')
 
 NEW_QUESTION, ANSWER = range(2)
 
@@ -104,6 +108,14 @@ if __name__ == '__main__':
     env.read_env()
     tg_api_key = env('TG_API_KEY')
     redis_db_url = env('REDIS_DB_URL')
+    tg_log_chat_id = env('TG_LOG_CHAT_ID')
+    
+    handler = TgLogsHandler(tg_api_key, tg_log_chat_id)
+    handler.setFormatter(
+        logging.Formatter('%(name)s %(levelname)s %(message)s')
+    )
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
     
     with open('questions.json', 'r') as file:
         questions = json.loads(file.read())
@@ -118,15 +130,22 @@ if __name__ == '__main__':
     conversation_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            NEW_QUESTION: [MessageHandler(Filters.text('Новый вопрос'), send_new_question)], 
+            NEW_QUESTION: [
+                MessageHandler(Filters.text('Новый вопрос'), send_new_question)
+            ], 
             ANSWER: [
                 MessageHandler(Filters.text('Сдаюсь'), handle_surrender),
-                MessageHandler(Filters.text, check_answer)
-                ]
+                MessageHandler(Filters.text & ~Filters.command, check_answer)
+            ]
         },
         fallbacks=[CommandHandler('quite', handle_break)]
     )
     dispatcher.add_handler(conversation_handler)
 
-    updater.start_polling()
-    updater.idle()
+    logger.info('Bot started')
+    while True:
+        try:
+            updater.start_polling()
+            updater.idle()
+        except Exception as ex:
+            logger.exception(ex)

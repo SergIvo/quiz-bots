@@ -1,4 +1,5 @@
 import json
+import logging
 from random import choice
 
 import vk_api as vk
@@ -7,7 +8,10 @@ from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.utils import get_random_id
 from environs import Env
 from redis import Redis
+from telegram_logging import TgLogsHandler
 
+
+logger = logging.getLogger('vk-quiz-bot')
 
 def make_regular_keyboard(buttons_markup, one_time):
     keyboard = VkKeyboard(one_time=one_time)
@@ -71,10 +75,32 @@ def handle_quiz_action(event, vk_api, questions, db_connection):
     )
 
 
+def start_polling(vk_session, questions, db_connection):
+    longpoll = VkLongPoll(vk_session)
+    vk_api = vk_session.get_api()
+    for event in longpoll.listen():
+        if event.type == VkEventType.MESSAGE_NEW and event.to_me:
+            handle_quiz_action(
+                event,
+                vk_api,
+                questions,
+                db_connection
+            )
+
+
 if __name__ == "__main__":
     env = Env()
     env.read_env()
     redis_db_url = env('REDIS_DB_URL')
+    tg_api_token = env('TG_API_KEY')
+    tg_log_chat_id = env('TG_LOG_CHAT_ID')
+    
+    handler = TgLogsHandler(tg_api_token, tg_log_chat_id)
+    handler.setFormatter(
+        logging.Formatter('%(name)s %(levelname)s %(message)s')
+    )
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(handler)
     
     with open('questions.json', 'r') as file:
         questions = json.loads(file.read())
@@ -82,14 +108,14 @@ if __name__ == "__main__":
     redis_connection = Redis.from_url(redis_db_url)
     
     vk_session = vk.VkApi(token=env('VK_API_TOKEN'))
-    vk_api = vk_session.get_api()
 
-    longpoll = VkLongPoll(vk_session)
-    for event in longpoll.listen():
-        if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-            handle_quiz_action(
-                event, 
-                vk_api, 
-                questions, 
+    logger.info('Bot started')
+    while True:
+        try:
+            start_polling(
+                vk_session,
+                questions,
                 redis_connection
             )
+        except Exception as ex:
+            logger.exception(ex)

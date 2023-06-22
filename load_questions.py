@@ -49,8 +49,6 @@ if  __name__ == '__main__':
     args = parser.parse_args()
     questions_directory = args.questions_directory
 
-    questions_filenames = os.listdir(args.questions_directory)
-    questions_text = get_questions_from_file(os.path.join(questions_directory, questions_filenames[3]))
-    questions = parse_questions_from_text(questions_text)
+    all_questions = load_all_questions(questions_directory)
     with open('questions.json', 'w') as file:
-        file.write(json.dumps(questions, indent=4))
+        file.write(json.dumps(all_questions, indent=4))

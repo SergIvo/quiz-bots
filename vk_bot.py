@@ -13,6 +13,7 @@ from telegram_logging import TgLogsHandler
 
 logger = logging.getLogger('vk-quiz-bot')
 
+
 def make_regular_keyboard(buttons_markup, one_time):
     keyboard = VkKeyboard(one_time=one_time)
     buttons_first_row = buttons_markup.pop(0)
@@ -33,7 +34,7 @@ def handle_quiz_action(event, vk_api, questions, db_connection):
     if event.text == 'Новый вопрос':
         new_question = choice(list(questions.keys()))
         db_connection.set(
-            user_id, 
+            user_id,
             new_question
         )
         message_text = new_question
@@ -94,19 +95,19 @@ if __name__ == "__main__":
     redis_db_url = env('REDIS_DB_URL')
     tg_api_token = env('TG_API_KEY')
     tg_log_chat_id = env('TG_LOG_CHAT_ID')
-    
+
     handler = TgLogsHandler(tg_api_token, tg_log_chat_id)
     handler.setFormatter(
         logging.Formatter('%(name)s %(levelname)s %(message)s')
     )
     logger.setLevel(logging.DEBUG)
     logger.addHandler(handler)
-    
+
     with open('questions.json', 'r') as file:
         questions = json.loads(file.read())
 
     redis_connection = Redis.from_url(redis_db_url)
-    
+
     vk_session = vk.VkApi(token=env('VK_API_TOKEN'))
 
     logger.info('Bot started')

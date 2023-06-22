@@ -3,7 +3,7 @@ import logging
 from random import choice
 
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, 
+from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters,
     CallbackContext, ConversationHandler)
 from environs import Env
 from redis import Redis
@@ -13,6 +13,7 @@ from telegram_logging import TgLogsHandler
 logger = logging.getLogger('tg-quiz-bot')
 
 NEW_QUESTION, ANSWER = range(2)
+
 
 def start(update: Update, context: CallbackContext):
     user = update.effective_user.first_name
@@ -35,10 +36,10 @@ def send_new_question(update: Update, context: CallbackContext):
     questions = context.bot_data.get('questions')
     db_connection = context.bot_data.get('db_connection')
     user_id = update.message.from_user.id
-    
+
     new_question = choice(list(questions.keys()))
     db_connection.set(
-        user_id, 
+        user_id,
         new_question
     )
     update.message.reply_text(
@@ -51,13 +52,13 @@ def send_new_question(update: Update, context: CallbackContext):
 def handle_surrender(update: Update, context: CallbackContext):
     keyboard = [['Новый вопрос']]
     keyboard_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
+
     questions = context.bot_data.get('questions')
     db_connection = context.bot_data.get('db_connection')
     user_id = update.message.from_user.id
     question = db_connection.get(user_id).decode()
     message_text = questions[question]
-    
+
     update.message.reply_text(
         message_text,
         reply_markup=keyboard_markup
@@ -101,7 +102,7 @@ def handle_break(update: Update, context: CallbackContext):
         reply_markup=ReplyKeyboardRemove()
     )
     return ConversationHandler.END
-    
+
 
 if __name__ == '__main__':
     env = Env()
@@ -109,14 +110,14 @@ if __name__ == '__main__':
     tg_api_key = env('TG_API_KEY')
     redis_db_url = env('REDIS_DB_URL')
     tg_log_chat_id = env('TG_LOG_CHAT_ID')
-    
+
     handler = TgLogsHandler(tg_api_key, tg_log_chat_id)
     handler.setFormatter(
         logging.Formatter('%(name)s %(levelname)s %(message)s')
     )
     logger.setLevel(logging.DEBUG)
     logger.addHandler(handler)
-    
+
     with open('questions.json', 'r') as file:
         questions = json.loads(file.read())
 
@@ -132,7 +133,7 @@ if __name__ == '__main__':
         states={
             NEW_QUESTION: [
                 MessageHandler(Filters.text('Новый вопрос'), send_new_question)
-            ], 
+            ],
             ANSWER: [
                 MessageHandler(Filters.text('Сдаюсь'), handle_surrender),
                 MessageHandler(Filters.text & ~Filters.command, check_answer)

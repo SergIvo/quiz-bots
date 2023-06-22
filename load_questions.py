@@ -12,17 +12,24 @@ def get_questions_from_file(file_path):
 
 
 def parse_questions_from_text(text):
-    question_blocks = re.findall(r'\bВопрос.+?Ответ:.+?(?=\n\n)', text, flags=re.DOTALL)
-    print('Found: ', len(question_blocks))
-    
+    question_blocks = re.findall(
+        r'\bВопрос.+?Ответ:.+?(?=\n\n)',
+        text,
+        flags=re.DOTALL
+    )
+
     questions = {}
     for question_block in question_blocks:
-        question = re.search(r'(?<=:\s).+(?=\sОтвет)', question_block, flags=re.DOTALL).group()
-        try:
-            answer = re.search(r'(?<=Ответ:\s).+', question_block, flags=re.DOTALL).group()
-        except:
-            print(question_block)
-            answer = None
+        question = re.search(
+            r'(?<=:\s).+(?=\sОтвет)',
+            question_block,
+            flags=re.DOTALL
+        ).group()
+        answer = re.search(
+            r'(?<=Ответ:\s).+',
+            question_block,
+            flags=re.DOTALL
+        ).group()
         questions[question] = answer
     return questions
 
@@ -38,11 +45,10 @@ def load_all_questions(questions_directory):
     return all_questions
 
 
-
-if  __name__ == '__main__':
+if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument(
-        'questions_directory', 
+        'questions_directory',
         type=str,
         help='path to directory with questions files'
     )

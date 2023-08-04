@@ -1,0 +1,8 @@
+__pycache__/
+quiz-questions/
+load_questions.py
+.env
+venv/
+.git/
+.gitignore
+clipboard.txt

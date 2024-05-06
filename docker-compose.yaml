@@ -1,0 +1,29 @@
+version: '3'
+services:
+  redis:
+    image: redis:latest
+
+  tg_bot:
+    build: .
+    volumes:
+      - ./app/:/usr/src/app/
+    environment:
+      - TG_API_KEY=${TG_API_KEY}
+      - TG_LOG_CHAT_ID=${TG_LOG_CHAT_ID}
+      - REDIS_DB_URL=redis://redis:6379/0
+    command: python tg_bot.py
+    depends_on: 
+      - redis
+
+  vk_bot:
+    build: .
+    volumes:
+      - ./app/:/usr/src/app/
+    environment:
+      - TG_API_KEY=${TG_API_KEY}
+      - TG_LOG_CHAT_ID=${TG_LOG_CHAT_ID}
+      - VK_API_TOKEN=${VK_API_TOKEN}
+      - REDIS_DB_URL=redis://redis:6379/0
+    command: python vk_bot.py
+    depends_on: 
+      - redis
